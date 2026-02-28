@@ -1,6 +1,6 @@
-# Google Auth Button
+# UAPA Google Auth
 
-Widget embebible que permite agregar autenticación con Google en cualquier página web con una sola función. Internamente abre un popup que maneja el flujo OAuth de Google y devuelve el `id_token` JWT listo para verificar en tu backend.
+Librería embebible que permite agregar autenticación con Google en cualquier página web con una sola función. Maneja el flujo OAuth completo mediante redirect y devuelve un `id_token` JWT listo para verificar en el backend.
 
 ---
 
@@ -8,10 +8,26 @@ Widget embebible que permite agregar autenticación con Google en cualquier pág
 
 | Archivo | Descripción |
 |---|---|
-| `auth-button.js` | Script embebible que expone `renderGoogleButton()` |
-| `auth-page.html` | Página intermediaria que ejecuta el OAuth de Google |
+| `google-auth.js` | Script embebible que expone `signInWithGoogle()` |
+| `auth_page.html` | Página intermediaria que ejecuta el OAuth de Google |
 
-Ambos archivos deben estar desplegados en el mismo dominio (ej. Netlify).
+Ambos están desplegados en [https://uapa-auth.netlify.app](https://uapa-auth.netlify.app).
+
+---
+
+## Flujo
+
+```
+Tu app → llama signInWithGoogle()
+       → redirect a auth_page.html?redirect_uri=...
+         → usuario hace click en botón de Google
+         → selecciona su cuenta
+         → token obtenido
+       → redirect de vuelta a tu app?token=XXX&email=...
+Tu app → signInWithGoogle() detecta el token en la URL
+       → ejecuta el callback(token, user)
+       → limpia la URL automáticamente
+```
 
 ---
 
@@ -19,27 +35,16 @@ Ambos archivos deben estar desplegados en el mismo dominio (ej. Netlify).
 
 ### 1. Incluir el script
 
-Agrega el script en tu página HTML:
-
 ```html
-<script src="https://tu-sitio.netlify.app/auth-button.js"></script>
+<script src="https://uapa-auth.netlify.app/google-auth.js"></script>
 ```
 
-### 2. Definir el contenedor
-
-Agrega un `div` donde quieres que aparezca el botón:
-
-```html
-<div id="login-btn"></div>
-```
-
-### 3. Llamar a `renderGoogleButton`
+### 2. Llamar a `signInWithGoogle()`
 
 ```html
 <script>
-  renderGoogleButton(
-    'login-btn',                                          // id del contenedor
-    function(token, user) {                               // callback
+  signInWithGoogle({
+    callback: function(token, user) {
       console.log(user.email);
       // enviar token al backend para verificar
       fetch('/api/auth/google/', {
@@ -47,9 +52,8 @@ Agrega un `div` donde quieres que aparezca el botón:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: token })
       });
-    },
-    'https://tu-sitio.netlify.app/auth-page.html'        // url de auth-page
-  );
+    }
+  });
 </script>
 ```
 
@@ -57,13 +61,14 @@ Agrega un `div` donde quieres que aparezca el botón:
 
 ## API
 
-### `renderGoogleButton(containerId, callback, authPageUrl)`
+### `signInWithGoogle(options)`
 
-| Parámetro | Tipo | Descripción |
-|---|---|---|
-| `containerId` | `string` | ID del elemento donde se renderiza el botón |
-| `callback` | `function(token, user)` | Función que se ejecuta al autenticarse |
-| `authPageUrl` | `string` | URL donde está desplegado `auth-page.html` |
+| Parámetro | Tipo | Requerido | Default | Descripción |
+|---|---|---|---|---|
+| `callback` | `function(token, user)` | ✅ | — | Se ejecuta al completar la autenticación |
+| `authPageUrl` | `string` | ❌ | `https://uapa-auth.netlify.app/auth_page.html` | URL de la página de autenticación |
+| `title` | `string` | ❌ | `'Bienvenido a UAPA'` | Título que se muestra en la página de login |
+| `subtitle` | `string` | ❌ | `''` | Subtítulo que se muestra en la página de login |
 
 ### Objeto `user` recibido en el callback
 
@@ -71,18 +76,59 @@ Agrega un `div` donde quieres que aparezca el botón:
 {
   "name":    "Juan Pérez",
   "email":   "juan@gmail.com",
-  "picture": "https://lh3.googleusercontent.com/...",
-  "sub":     "1234567890"
+  "picture": "https://lh3.googleusercontent.com/..."
 }
 ```
 
 ### `token`
 
-JWT firmado por Google. Úsalo en tu backend para verificar la identidad del usuario. **No confíes en los datos del `user` sin verificar el token en el servidor.**
+JWT firmado por Google. Úsalo en tu backend para verificar la identidad del usuario. **No confíes en los datos del objeto `user` sin verificar el token en el servidor.**
 
 ---
 
-## Verificación en el backend (Django)
+## Ejemplos
+
+### Mínimo
+
+```javascript
+signInWithGoogle({
+  callback: function(token, user) {
+    console.log('Autenticado:', user.email);
+  }
+});
+```
+
+### Con textos personalizados
+
+```javascript
+signInWithGoogle({
+  title:    'Bienvenido al Portal Estudiantil',
+  subtitle: 'Usa tu cuenta institucional @uapa.edu.do',
+  callback: function(token, user) {
+    fetch('/api/auth/google/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    }).then(res => res.json()).then(data => {
+      window.location.href = '/dashboard';
+    });
+  }
+});
+```
+
+### Con URL de auth_page personalizada
+
+```javascript
+signInWithGoogle({
+  authPageUrl: 'https://mi-dominio.com/auth_page.html',
+  title:       'Mi Aplicación',
+  callback:    function(token, user) { ... }
+});
+```
+
+---
+
+## Verificación del token en el backend (Django)
 
 ```python
 from google.oauth2 import id_token
@@ -92,8 +138,9 @@ GOOGLE_CLIENT_ID = 'TU_CLIENT_ID.apps.googleusercontent.com'
 
 def google_login(request):
     token = request.data.get('token')
-    idinfo = id_token.verify_oauth2_token(token, requests.Request(), GOOGLE_CLIENT_ID)
-
+    idinfo = id_token.verify_oauth2_token(
+        token, requests.Request(), GOOGLE_CLIENT_ID
+    )
     email      = idinfo['email']
     first_name = idinfo.get('given_name', '')
     last_name  = idinfo.get('family_name', '')
@@ -101,27 +148,7 @@ def google_login(request):
 
 ---
 
-## Cómo funciona internamente
-
-```
-Tu página             auth-page.html (popup)         Google
-    |                        |                           |
-  click botón ─────── abre popup (400x500)              |
-    |                  renderButton de Google ──────────>|
-    |                        |                  selector de cuenta
-    |                        |<────── id_token JWT ──────|
-    |                  BroadcastChannel ──────────────── |
-    |<── callback(token, user) ──────                    |
-    |                  window.close()                    |
-  fetch backend                                          |
-```
-
-El popup nunca navega fuera de `auth-page.html`, por lo que `BroadcastChannel` funciona correctamente entre las ventanas del mismo origen.
-
----
-
 ## Requisitos
 
-- `auth-page.html` debe estar en **HTTPS**
-- El dominio de `auth-page.html` debe estar registrado en **Google Cloud Console** como _Authorized JavaScript origin_
-- El navegador del usuario debe soportar `BroadcastChannel` (todos los navegadores modernos)
+- El dominio donde uses `google-auth.js` debe estar registrado en **Google Cloud Console** como _Authorized JavaScript origin_
+- Navegadores modernos con soporte para `URLSearchParams` y `history.replaceState`
