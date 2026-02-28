@@ -26,7 +26,7 @@
     style.textContent = STYLES;
     document.head.appendChild(style);
   
-    window.renderGoogleButton = function (containerId, callback, authPageUrl='https://tudominio.com/auth-page.html') {
+    window.renderGoogleButton = function (containerId, callback, authPageUrl='https://uapa-auth.netlify.app/auth_page.html') {
       const container = document.getElementById(containerId);
       if (!container) {
         console.error(`renderGoogleButton: no se encontró el elemento #${containerId}`);
@@ -50,6 +50,7 @@
   
         const channel = new BroadcastChannel('google_oauth');
         channel.onmessage = function ({ data }) {
+          console.log(data);
           channel.close();
           if (data.type === 'GOOGLE_AUTH_SUCCESS') {
             callback(data.token, data.user);
