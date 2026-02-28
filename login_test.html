@@ -1,0 +1,31 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <script src="https://uapa-auth.netlify.app/google-auth.js"></script>
+
+        <title>Mi App</title>
+    </head>
+    <body>
+        <div id="google-button"></div>
+    </body>
+    <script>
+        signInWithGoogle({
+            title:    'Bienvenido a Mi App',
+            subtitle: 'Accede al portal de gestión presupuestaria utilizando tu cuenta institucional de Google.',
+            callback: function(token, user) {
+              // Ocultar panel de login
+              console.log(user)
+        
+              {% comment %} // Enviar token al backend
+              fetch('/api/auth/google/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: token })
+              }); 
+              {% endcomment %}
+            }
+          });
+      </script>
+</html>
