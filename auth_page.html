@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autenticación</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #f1f5f9;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 2.5rem 2rem;
+    width: 340px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+    text-align: center;
+  }
+  .logo { font-size: 2.5rem; margin-bottom: .75rem; }
+  h1 { font-size: 1.2rem; color: #1e293b; margin-bottom: .3rem; }
+  p  { font-size: .85rem; color: #94a3b8; margin-bottom: 2rem; }
+
+  .btn-wrapper {
+    display: flex;
+    justify-content: center;
+  }
+
+  .status {
+    margin-top: 1rem;
+    font-size: .8rem;
+    color: #64748b;
+    min-height: 1.2rem;
+  }
+  .status.success { color: #16a34a; font-weight: 700; }
+  .status.error   { color: #dc2626; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🔐</div>
+  <h1>Selecciona tu cuenta</h1>
+  <p>para continuar en la aplicación</p>
+
+  <div class="btn-wrapper">
+    <div id="googleBtn"></div>
+  </div>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+  const GOOGLE_CLIENT_ID = '478848519153-0tklbkp5d7252099relj297632eka3qg.apps.googleusercontent.com';
+
+  function setStatus(msg, type = '') {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = 'status ' + type;
+  }
+
+  function handleCredentialResponse(response) {
+    const token   = response.credential;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+
+    setStatus('✓ ' + payload.email, 'success');
+
+    const channel = new BroadcastChannel('google_oauth');
+    channel.postMessage({
+      type:  'GOOGLE_AUTH_SUCCESS',
+      token: token,
+      user: {
+        name:    payload.name,
+        email:   payload.email,
+        picture: payload.picture,
+        sub:     payload.sub,
+      }
+    });    
+    channel.close();
+    setTimeout(() => window.close(), 600);
+  }
+
+  function initializeGoogle() {
+    if (window.google && window.google.accounts && document.getElementById('googleBtn')) {
+      window.google.accounts.id.initialize({
+        client_id:            GOOGLE_CLIENT_ID,
+        callback:             handleCredentialResponse,
+        auto_select:          false,
+        cancel_on_tap_outside: true,
+      });
+
+      window.google.accounts.id.renderButton(
+        document.getElementById('googleBtn'),
+        {
+          theme: 'outline',
+          size:  'large',
+          width: 296,
+          text:  'signin_with',
+          shape: 'pill',
+        }
+      );
+    } else {
+      setTimeout(initializeGoogle, 200); // reintentar hasta que Google cargue
+    }
+  }
+
+  initializeGoogle();
+</script>
+</body>
+</html>
